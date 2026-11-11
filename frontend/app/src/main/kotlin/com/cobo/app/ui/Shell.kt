@@ -189,6 +189,7 @@ internal sealed class FeedTabSpec {
             FeedTabItem.Secret -> "还没有悄悄关注的人"
             FeedTabItem.Favorites -> "还没有收藏的微博"
             FeedTabItem.Nearby -> "附近需要定位\n到设置的「附近」里打开定位，或选一座城市"
+            FeedTabItem.SuperTopic -> "还没有关注的超话"
             FeedTabItem.None -> "这里还没有微博"
         }
     }
@@ -254,6 +255,8 @@ fun MainShell(nav: NavState) {
         )
     }
     val recommendStore = remember { FeedStore("102803", readOnly = guest) }
+    // 超话栏位由 SuperTopicsPage 自己取关注列表；这里只占一个不会被使用的 FeedStore 位置。
+    val superTopicStore = remember { FeedStore("supertopic", readOnly = true) { _, _ -> FeedPage(emptyList(), null) } }
     val circleStore = filterStores.getValue(FeedFilter.Circle)
     val followStore = filterStores.getValue(filter)
 
@@ -287,6 +290,7 @@ fun MainShell(nav: NavState) {
         FeedTabItem.Secret -> filterStores.getValue(FeedFilter.Secret)
         FeedTabItem.Favorites -> filterStores.getValue(FeedFilter.Favorites)
         FeedTabItem.Nearby -> nearbyStore
+        FeedTabItem.SuperTopic -> superTopicStore
         FeedTabItem.None -> friendsStore
     }
 
@@ -322,6 +326,7 @@ fun MainShell(nav: NavState) {
         }
     }
     val feedEmptyTexts = feedTabs.map { it.emptyText }
+    val feedSuperTopicPages = feedTabs.map { it is FeedTabSpec.Custom && it.item == FeedTabItem.SuperTopic }
 
     val followIndex = feedTabs.indexOfFirst { it.isFollow }.coerceAtLeast(0)
     val initialPage = feedTabs.indexOfFirst { it.key == App.settings.feedTabKey }.takeIf { it >= 0 }
@@ -543,6 +548,7 @@ fun MainShell(nav: NavState) {
                                 pagerState = feedPager,
                                 stores = feedStores,
                                 emptyTexts = feedEmptyTexts,
+                                superTopicPages = feedSuperTopicPages,
                                 followStore = followStore,
                                 recommendStore = recommendStore,
                                 topInset = feedTopBarHeight,

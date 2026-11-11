@@ -21,6 +21,7 @@ enum class FeedTabItem(val key: String, val label: String, val tag: String) {
     Secret("secret", "悄悄关注", "feed_tab_secret"),
     Favorites("favorites", "收藏", "feed_tab_favorites"),
     Nearby("nearby", "附近", "feed_tab_nearby"),
+    SuperTopic("supertopic", "超话", "feed_tab_supertopic"),
     ;
 
     companion object {

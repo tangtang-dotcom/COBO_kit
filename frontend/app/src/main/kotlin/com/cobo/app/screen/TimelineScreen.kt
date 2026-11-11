@@ -60,6 +60,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.roundToInt
 
+private typealias RefreshAction = suspend () -> Unit
+
 enum class FeedFilter(val label: String, val emptyText: String) {
     All("全部", "这里还没有微博"),
     Following("关注", "这里还没有微博"),
@@ -218,6 +220,8 @@ fun TimelineScreen(
     /** One store per pager page, in the order of the header segments. */
     stores: List<FeedStore>,
     emptyTexts: List<String>,
+    /** 与 [stores] 一一对应：true 表示这一页渲染关注超话列表，而不是普通信息流。 */
+    superTopicPages: List<Boolean>,
     followStore: FeedStore,
     recommendStore: FeedStore,
     topInset: Dp,
@@ -228,6 +232,9 @@ fun TimelineScreen(
     val refreshScope = rememberCoroutineScope()
     val pullStates = remember(stores.size) {
         mutableStateListOf<FullPagePullToRefreshState?>().apply { repeat(stores.size) { add(null) } }
+    }
+    val superTopicRefreshers = remember(superTopicPages.size) {
+        arrayOfNulls<RefreshAction>(superTopicPages.size)
     }
     val pageMemory = remember(stores.size) { List(stores.size) { PageMemory() } }
     // The header folds its title row away one pixel per pixel scrolled; past the first item the
@@ -261,6 +268,7 @@ fun TimelineScreen(
     }
     val currentFollowStore by rememberUpdatedState(followStore)
     val currentStores by rememberUpdatedState(stores)
+    val currentSuperTopicPages by rememberUpdatedState(superTopicPages)
     LaunchedEffect(Unit) {
         App.feedRefreshEvents.collect { currentFollowStore.refresh() }
     }
@@ -272,10 +280,17 @@ fun TimelineScreen(
             // page slides down and the list stays put while it reloads.
             listStates.getOrNull(page)?.glideToTop()
             val pull = pullStates.getOrNull(page)
-            if (pull != null) {
-                pull.startRefresh { refreshScope.launch { store.refresh() } }
+            val superTopic = currentSuperTopicPages.getOrNull(page) == true
+            val refresh: RefreshAction = if (superTopic) {
+                superTopicRefreshers.getOrNull(page)
+                    ?: return@collect
             } else {
-                store.refresh()
+                { store.refresh() }
+            }
+            if (pull != null) {
+                pull.startRefresh { refreshScope.launch { refresh() } }
+            } else {
+                refresh()
             }
         }
     }
@@ -293,16 +308,27 @@ fun TimelineScreen(
         val store = stores.getOrNull(page) ?: return@HorizontalPager
         val emptyText = emptyTexts.getOrNull(page).orEmpty()
         val listState = listStates.getOrNull(page) ?: return@HorizontalPager
-        TimelinePage(
-            nav = nav,
-            store = store,
-            page = page,
-            topInset = topInset,
-            emptyText = emptyText,
-            listState = listState,
-            memory = pageMemory.getOrNull(page) ?: return@HorizontalPager,
-            onPullState = { if (page < pullStates.size) pullStates[page] = it },
-        )
+        if (superTopicPages.getOrNull(page) == true) {
+            SuperTopicsPage(
+                nav = nav,
+                page = page,
+                topInset = topInset,
+                listState = listState,
+                onPullState = { if (page < pullStates.size) pullStates[page] = it },
+                onRefreshReady = { refresh -> superTopicRefreshers[page] = refresh },
+            )
+        } else {
+            TimelinePage(
+                nav = nav,
+                store = store,
+                page = page,
+                topInset = topInset,
+                emptyText = emptyText,
+                listState = listState,
+                memory = pageMemory.getOrNull(page) ?: return@HorizontalPager,
+                onPullState = { if (page < pullStates.size) pullStates[page] = it },
+            )
+        }
     }
 }
 

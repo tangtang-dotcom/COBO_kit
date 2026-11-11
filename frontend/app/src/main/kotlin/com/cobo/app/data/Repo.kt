@@ -821,13 +821,17 @@ class Repo(private val context: Context, private val store: Store) {
         return out
     }
 
-    suspend fun superTopic(containerId: String, sinceId: String? = null): SuperTopicPage {
+    suspend fun superTopic(
+        containerId: String,
+        sinceId: String? = null,
+        order: SuperTopicOrder = SuperTopicOrder.LatestComments,
+    ): SuperTopicPage {
         val id = superTopicId(containerId) ?: throw ApiException("无效的超话地址")
         if (!hasSession()) throw ApiException("超话需要登录后查看", "-100")
         val cursor = sinceId?.takeIf { it.isNotBlank() }
         if (cursor != null && !cursor.matches(Regex("[0-9]+"))) throw ApiException("无效的超话翻页参数")
         val params = mapOf(
-            "containerid" to "${id}_-_feed",
+            "containerid" to "$id${order.suffix}",
             "since_id" to cursor,
         )
         val root = try {
@@ -842,6 +846,29 @@ class Repo(private val context: Context, private val store: Store) {
             throw ApiException("超话加载失败")
         }
         return parseSuperTopic(root, id)
+    }
+
+    /** 当前账号关注的超话列表，分页游标来自 cardlistInfo.since_id。 */
+    suspend fun followedSuperTopics(sinceId: String? = null): FollowedSuperTopicPage {
+        if (!hasSession()) throw ApiException("超话需要登录后查看", "-100")
+        val cursor = sinceId?.takeIf { it.isNotBlank() }
+        if (cursor != null && !cursor.matches(Regex("[0-9]+"))) throw ApiException("无效的超话翻页参数")
+        val params = mapOf(
+            "containerid" to "100803_-_followsuper",
+            "since_id" to cursor,
+        )
+        val root = try {
+            get(Api.url("https://m.weibo.cn/api/container/getIndex", params), loginCookie(), force = true)
+        } catch (e: ApiHttpException) {
+            if (e.code == 432) throw ApiException("超话需要登录后查看", "432")
+            throw ApiException("超话列表加载失败（HTTP ${e.code}）")
+        } catch (e: ApiException) {
+            if (e.errno == "-100" || e.message == GUEST_BLOCKED) {
+                throw ApiException("超话需要登录后查看", "-100")
+            }
+            throw ApiException("超话列表加载失败")
+        }
+        return parseFollowedSuperTopics(root)
     }
 
     suspend fun searchSuperTopics(query: String): List<TopicItem> {

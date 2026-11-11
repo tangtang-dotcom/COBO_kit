@@ -1,0 +1,60 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.8.2'
+
+      - name: Checkout COUI snapshot source
+        uses: actions/checkout@v4
+        with:
+          repository: Costben/coui17
+          path: coui
+
+      - name: Publish COUI snapshot to local repo
+        working-directory: coui
+        run: gradle --no-daemon publishAllToLocalRepository -ProllingSnapshot
+
+      # settings.gradle.kts 以 frontend/ 为基准找 ../../coui；Actions 的默认工作区是
+      # $GITHUB_WORKSPACE/COBO_kit，checkout 的 coui 在其内部，因此在工作区上一级补一个入口。
+      - name: Link COUI repository at expected path
+        run: ln -s "$GITHUB_WORKSPACE/coui" "$GITHUB_WORKSPACE/../coui"
+
+      - name: Build debug APK
+        working-directory: frontend
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobo-debug-apk
+          path: frontend/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

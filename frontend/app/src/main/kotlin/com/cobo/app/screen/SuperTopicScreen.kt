@@ -1,6 +1,7 @@
 package com.cobo.app.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,6 +37,7 @@ import com.cobo.app.App
 import com.cobo.app.data.ApiException
 import com.cobo.app.data.FeedPage
 import com.cobo.app.data.SuperTopicInfo
+import com.cobo.app.data.SuperTopicOrder
 import com.cobo.app.data.SuperTopicPage
 import com.cobo.app.ui.CoboIcons
 import com.cobo.app.ui.NavState
@@ -73,6 +78,7 @@ import kotlinx.coroutines.launch
 /** Keeps the existing feed's request serialization, refresh and duplicate filtering. */
 class SuperTopicStore(
     containerId: String,
+    order: SuperTopicOrder = SuperTopicOrder.LatestComments,
     loader: suspend (String?) -> SuperTopicPage,
 ) {
     var info by mutableStateOf<SuperTopicInfo?>(null)
@@ -80,7 +86,7 @@ class SuperTopicStore(
     var lastRequestWasRefresh = true
         private set
     private val cursors = HashSet<String>()
-    val feed = FeedStore(containerId, readOnly = true) { cursor, _ ->
+    val feed = FeedStore("$containerId:${order.key}", readOnly = true) { cursor, _ ->
         lastRequestWasRefresh = cursor == null
         val page = loader(cursor)
         if (cursor == null) cursors.clear() else cursors.add(cursor)
@@ -95,8 +101,9 @@ class SuperTopicStore(
 @Composable
 fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
     val scope = rememberCoroutineScope()
-    val store = remember(containerId) {
-        SuperTopicStore(containerId) { cursor -> App.repo.superTopic(containerId, cursor) }
+    var order by remember(containerId) { mutableStateOf(SuperTopicOrder.LatestComments) }
+    val store = remember(containerId, order) {
+        SuperTopicStore(containerId, order) { cursor -> App.repo.superTopic(containerId, cursor, order) }
     }
     val feed = store.feed
     val listState = rememberLazyListState()
@@ -148,6 +155,11 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
                 ) {
                     item(key = "header") {
                         Column(Modifier.padding(8.dp)) {
+                            SuperTopicOrderRow(
+                                selected = order,
+                                onSelect = { next -> if (next != order) order = next },
+                            )
+                            Spacer(Modifier.height(8.dp))
                             store.info?.let { info ->
                                 Row {
                                     Avatar(info.avatar, 56.dp)
@@ -247,6 +259,30 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
                             Icon(CoboIcons.Globe, "网页查看", Modifier.size(24.dp))
                         }
                     },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuperTopicOrderRow(selected: SuperTopicOrder, onSelect: (SuperTopicOrder) -> Unit) {
+    val scheme = COUITheme.colorScheme
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SuperTopicOrder.entries.forEach { order ->
+            val active = order == selected
+            Box(
+                Modifier
+                    .testTag("supertopic_order_${order.key}")
+                    .clip(RoundedCornerShape(50))
+                    .background(if (active) scheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+                    .clickable { onSelect(order) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = order.label,
+                    fontSize = 13.sp,
+                    color = if (active) scheme.primary else scheme.onSurfaceSecondary,
                 )
             }
         }
