@@ -1,5 +1,7 @@
 package com.cobo.app.data
 
+import app.module.lib.UniqueNative
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -35,7 +37,9 @@ object ContainerApi {
         .build()
 
     /** 通用参数。顺序即 `cum` 的输入顺序，别动。 */
-    private fun common(session: Session?): LinkedHashMap<String, String?> = linkedMapOf(
+    private fun common(session: Session?): LinkedHashMap<String, String?> {
+        val now = System.currentTimeMillis().toString()
+        return linkedMapOf(
         "c" to "android",
         "from" to WeiboNative.FROM,
         "wm" to "2468_1001",
@@ -53,8 +57,20 @@ object ContainerApi {
         "android_id" to Api.androidId(),
         "gsid" to session?.gsid?.ifBlank { null },
         "i" to WeiboNative.i(),
-        "s" to session?.uid?.ifBlank { null }?.let { WeiboNative.s(it) },
-    )
+        "check_id" to now,
+        "ul_ctime" to now,
+        "s" to session?.uid?.ifBlank { null }?.let { signS(it) },
+        )
+    }
+
+    /** 优先用 One 同款的 SecShell 签名；库没加载成功再退回旧的 libwbutil。 */
+    private fun signS(uid: String): String? {
+        if (UniqueNative.isLoaded()) {
+            val v = runCatching { UniqueNative.convert(uid) }.getOrNull()
+            if (!v.isNullOrBlank()) return v
+        }
+        return WeiboNative.s(uid)
+    }
 
     suspend fun get(
         path: String,
