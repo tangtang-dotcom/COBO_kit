@@ -67,13 +67,29 @@ object ContainerApi {
         session: Session,
     ): JSONObject = call(path, params, form, session, post = true)
 
+    /** 同 [post]，额外带回响应里的 `Set-Cookie`（登录接口要靠它拼 cookie 表）。 */
+    suspend fun postFull(
+        path: String,
+        params: Map<String, String?> = emptyMap(),
+        form: Map<String, String> = emptyMap(),
+        session: Session,
+    ): Pair<JSONObject, List<String>> = callFull(path, params, form, session, post = true)
+
     private suspend fun call(
         path: String,
         params: Map<String, String?>,
         form: Map<String, String>,
         session: Session,
         post: Boolean,
-    ): JSONObject = withContext(Dispatchers.IO) {
+    ): JSONObject = callFull(path, params, form, session, post).first
+
+    private suspend fun callFull(
+        path: String,
+        params: Map<String, String?>,
+        form: Map<String, String>,
+        session: Session,
+        post: Boolean,
+    ): Pair<JSONObject, List<String>> = withContext(Dispatchers.IO) {
         val query = common(session)
         params.forEach { (key, value) -> query[key] = value }
         val unsigned = "/2/${path.trimStart('/')}?" + encode(query)
@@ -108,7 +124,7 @@ object ContainerApi {
             if (errno != 0) {
                 throw ApiException(json.optString("errmsg").ifBlank { "接口错误（$errno）" }, errno.toString())
             }
-            json
+            json to response.headers("Set-Cookie")
         }
     }
 

@@ -72,8 +72,26 @@ object ClientLogin {
             "getcookie" to "1",
             "getoauth" to "1",
         )
-        val (root, setCookie) = Api.containerPostFull("account/login", query, form)
-        return parse(root, setCookie) ?: throw ApiException(message(root))
+        // 老通道：极简参数。微博对 `account/login` 回 -105 客户端身份校验失败后，
+        // 落到下面的签名通道；两边都失败才把错误抛给上层（上层再退网页登录）。
+        var legacyError: Throwable? = null
+        val legacy = runCatching { Api.containerPostFull("account/login", query, form) }
+            .onFailure { legacyError = it }
+            .getOrNull()
+        if (legacy != null) {
+            parse(legacy.first, legacy.second)?.let { return it }
+            legacyError = ApiException(message(legacy.first))
+        }
+        // 签名通道：补齐 `i` / `s` / `cum` 等客户端身份，走容器端同一套签名链。
+        val signedSession = Session(cookie = "", uid = "", savedAt = System.currentTimeMillis())
+        val signed = runCatching { ContainerApi.postFull("account/login", query, form, signedSession) }
+            .onFailure { if (legacyError == null) legacyError = it }
+            .getOrNull()
+        if (signed != null) {
+            parse(signed.first, signed.second)?.let { return it }
+            throw ApiException(message(signed.first))
+        }
+        throw legacyError ?: ApiException("登录失败")
     }
 
     /** 用现存 gsid 换一份新 cookie。返回的 gsid 可能已经滚动，取新的。 */
@@ -87,8 +105,27 @@ object ClientLogin {
             "getuser" to "1",
             "getoauth" to "1",
         )
-        val (root, setCookie) = Api.containerPostFull("account/getoauth", query, emptyMap())
-        return parse(root, setCookie) ?: throw ApiException(message(root))
+        var legacyError: Throwable? = null
+        val legacy = runCatching { Api.containerPostFull("account/getoauth", query, emptyMap()) }
+            .onFailure { legacyError = it }
+            .getOrNull()
+        if (legacy != null) {
+            parse(legacy.first, legacy.second)?.let { return it }
+            legacyError = ApiException(message(legacy.first))
+        }
+        val signedSession = Session(
+            cookie = "",
+            uid = uid,
+            savedAt = System.currentTimeMillis(),
+            gsid = gsid,
+        )
+        val signed = runCatching { ContainerApi.postFull("account/getoauth", query, emptyMap(), signedSession) }
+            .onFailure { if (legacyError == null) legacyError = it }
+            .getOrNull()
+        if (signed != null) {
+            parse(signed.first, signed.second)?.let { return it }
+        }
+        throw legacyError ?: ApiException("登录态续期失败")
     }
 
     private fun parse(root: JSONObject, setCookie: List<String> = emptyList()): Result? {
