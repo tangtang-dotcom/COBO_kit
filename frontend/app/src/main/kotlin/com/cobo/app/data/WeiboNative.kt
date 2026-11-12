@@ -14,7 +14,7 @@ import com.sina.weibo.utils.NetCheckUtils
 object WeiboNative {
 
     /** 渠道号。跟容器接口的 `from` 用同一个，换渠道要一起换。 */
-    const val FROM = "10B6395010"
+    const val FROM = "10G7095010"
 
     /** `getIValue` 的固定输入，原版客户端也是这个 15 个 0。 */
     private const val I_INPUT = "000000000000000"
