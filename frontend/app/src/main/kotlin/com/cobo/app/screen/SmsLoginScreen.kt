@@ -40,10 +40,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * 手机号 + 短信验证码登录。
+ * 手机号 + 短信验证码登录，走客户端接口（与 One 一致）。
  *
- * 走客户端接口，服务端会一并下发 gsid 和长期凭证。微博目前对这条通道回
- * `-105 客户端身份校验失败`，所以失败时会自动退到网页登录；通道恢复后不用改代码。
+ * 一次登录同时拿到 cookie（用于 m.weibo.cn 网页数据）和 gsid（用于 api.weibo.cn/2
+ * 客户端数据），成功后直接进主页；超话等级等只有客户端接口才有的字段依赖这份 gsid。
  */
 @Composable
 fun SmsLoginScreen(nav: NavState, addAccount: Boolean, relogin: String? = null) {
@@ -88,21 +88,22 @@ fun SmsLoginScreen(nav: NavState, addAccount: Boolean, relogin: String? = null) 
     fun login() {
         if (!ready || logging) return
         logging = true
-        hint = "正在获取客户端凭证…"
+        hint = "正在登录…"
         scope.launch {
-            val result = runCatching { App.repo.loginClientForSupertopic(phone.trim(), code.trim()) }
+            val result = runCatching { App.repo.loginWithClient(phone.trim(), code.trim()) }
             logging = false
             val account = result.getOrNull()
             if (account == null) {
-                val reason = result.exceptionOrNull()?.message ?: "获取失败"
+                val reason = result.exceptionOrNull()?.message ?: "登录失败"
                 hint = if (reason.contains("客户端") || reason.contains("105")) {
-                    "客户端通道被微博拒绝：$reason"
+                    "客户端通道被微博拒绝：$reason（可点下方备用网页登录）"
                 } else {
                     reason
                 }
                 return@launch
             }
-            hint = "已拿到客户端凭证（gsid），网页登录没动。返回后超话页才能出等级。"
+            hint = "登录成功"
+            nav.reset(Route.Main)
         }
     }
 
@@ -125,7 +126,7 @@ fun SmsLoginScreen(nav: NavState, addAccount: Boolean, relogin: String? = null) 
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             Text(
-                "短信登录走客户端接口，微博可能拒绝；被拒会自动改用网页登录。",
+                "用手机号 + 短信验证码登录（客户端接口，一次登录即完成，主页和超话通用）。",
                 fontSize = 13.sp,
                 color = COUITheme.colorScheme.onSurfaceSecondary,
             )
@@ -180,7 +181,7 @@ fun SmsLoginScreen(nav: NavState, addAccount: Boolean, relogin: String? = null) 
             )
             Spacer(Modifier.height(4.dp))
             TextButton(
-                text = "改用网页登录",
+                text = "备用：网页登录",
                 onClick = {
                     nav.push(
                         Route.Login(

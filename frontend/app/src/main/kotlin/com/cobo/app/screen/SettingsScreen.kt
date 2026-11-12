@@ -399,13 +399,22 @@ fun SettingsScreen(nav: NavState) {
                             },
                         )
                     } else {
-                        ArrowPreference(
-                            title = "退出登录",
-                            modifier = Modifier.testTag("settings_logout"),
-                            summary = "清除本地会话",
-                            cardListPosition = CardListPosition.Full,
-                            onClick = { logout = true },
-                        )
+                        Column {
+                            ArrowPreference(
+                                title = "用手机号重新登录",
+                                modifier = Modifier.testTag("settings_sms_login"),
+                                summary = "走客户端接口，登录后超话等页面能显示等级",
+                                cardListPosition = CardListPosition.Head,
+                                onClick = { nav.push(Route.SmsLogin()) },
+                            )
+                            ArrowPreference(
+                                title = "退出登录",
+                                modifier = Modifier.testTag("settings_logout"),
+                                summary = "清除本地会话",
+                                cardListPosition = CardListPosition.Tail,
+                                onClick = { logout = true },
+                            )
+                        }
                     }
                 }
             }

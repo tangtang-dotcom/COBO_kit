@@ -370,6 +370,15 @@ class Repo(private val context: Context, private val store: Store) {
             val reason = probe.exceptionOrNull()?.message.orEmpty()
             throw ApiException("登录成功，但容器会话不可用：$reason")
         }
+        // 客户端下发的 cookie 如果不能在 m.weibo.cn 上用，主页会变成未登录，这里提前验一次：
+        // 用这份 cookie 拉一次网页 config，login 必须为真，否则主页抓不到数据。
+        val webConfig = runCatching { get(Api.url("https://m.weibo.cn/api/config"), result.cookie, force = true) }
+            .getOrNull()
+        val webData = webConfig?.optJSONObject("data")
+        val webLogged = webData != null && (webData.optBoolean("login", false) || webData.optInt("login", 0) == 1)
+        if (!webLogged) {
+            throw ApiException("客户端 cookie 无法用于网页接口，请改用下方备用网页登录")
+        }
         val uid = result.uid
         val user = runCatching { profileFor(result.cookie, uid, force = true) }.getOrNull()
         App.cache.clear()
@@ -879,7 +888,9 @@ class Repo(private val context: Context, private val store: Store) {
         order: SuperTopicOrder = SuperTopicOrder.LatestComments,
     ): SuperTopicPage {
         val id = superTopicId(containerId) ?: throw ApiException("无效的超话地址")
-        val session = store.auxGsid() ?: throw ApiException("超话等级需要先在短信登录拿到客户端凭证", "-100")
+        val session = store.session()?.takeIf { it.gsid.isNotBlank() }
+            ?: store.auxGsid()
+            ?: throw ApiException("超话等级需要先用手机号登录拿到客户端凭证", "-100")
         val cursor = sinceId?.takeIf { it.isNotBlank() }
         val params = linkedMapOf<String, String?>(
             "containerid" to "$id${order.suffix}",
@@ -896,7 +907,8 @@ class Repo(private val context: Context, private val store: Store) {
         sinceId: String? = null,
         order: SuperTopicOrder = SuperTopicOrder.LatestComments,
     ): SuperTopicPage {
-        if (store.auxGsid() != null) {
+        val clientReady = store.session()?.gsid?.isNotBlank() == true || store.auxGsid() != null
+        if (clientReady) {
             val result = runCatching { superTopicClient(containerId, sinceId, order) }
             result.getOrNull()?.let { return it }
             val reason = result.exceptionOrNull()?.message.orEmpty()
