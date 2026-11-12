@@ -1,6 +1,7 @@
 package com.cobo.app.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,8 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cobo.app.App
@@ -159,6 +163,28 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
                                     Spacer(Modifier.width(12.dp))
                                     Column {
                                         Text(info.title, fontSize = 20.sp)
+                                        if (info.level.isNotBlank() || info.titleSub.isNotBlank() || info.rank.isNotBlank()) {
+                                            Spacer(Modifier.height(5.dp))
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            ) {
+                                                if (info.level.isNotBlank()) SuperTopicLevelBadge(info.level)
+                                                val subline = info.titleSub.ifBlank {
+                                                    info.rank.takeIf { it.isNotBlank() }
+                                                        ?.let { "超话排名 $it" }.orEmpty()
+                                                }
+                                                if (subline.isNotBlank()) {
+                                                    Text(
+                                                        text = subline,
+                                                        fontSize = 11.sp,
+                                                        color = COUITheme.colorScheme.onSurfaceSecondary,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                }
+                                            }
+                                        }
                                         Spacer(Modifier.height(4.dp))
                                         val counts = listOf(
                                             info.readCount.takeIf { it.isNotBlank() }?.let { "阅读 $it" },
@@ -295,4 +321,26 @@ private fun SuperTopicSortHeader(
             tagFor = { order -> "supertopic_order_${order.key}" },
         )
     }
+}
+
+private val superTopicLevelPattern = Regex("(?i)^(lv\\.?\\s*\\d+|等级\\s*\\d+|\\d+\\s*级)$")
+
+/** 列表卡片里的 desc1 是否是可作徽章的超话等级文本。 */
+internal fun isSuperTopicLevelText(text: String): Boolean =
+    superTopicLevelPattern.matches(text.trim())
+
+/** 超话等级小徽章，详情页头部与关注列表卡片共用。 */
+@Composable
+internal fun SuperTopicLevelBadge(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text.trim(),
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Medium,
+        color = Color(0xFFB47A00),
+        maxLines = 1,
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color(0xFFFFF1CC))
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+    )
 }

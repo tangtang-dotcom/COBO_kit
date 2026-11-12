@@ -171,6 +171,34 @@ class SuperTopicTest {
         for (url in urls) assertNull(url, superTopicId(url))
     }
 
+    @Test
+    fun parsesLevelTitleSubAndRank() {
+        val root = response()
+        val page = root.getJSONObject("data").getJSONObject("pageInfo")
+        page.put("level", "7")
+        page.put("level_icon", "https://example.com/lv7.png")
+        page.put("level_scheme", "sinaweibo://pageinfo?containerid=x")
+        page.put("urank", "3")
+        val info = parseSuperTopic(root, id).info
+        assertEquals("LV.7", info.level)
+        assertEquals("https://example.com/lv7.png", info.levelIcon)
+        assertEquals("手游超话No.3", info.titleSub)
+        assertEquals("3", info.rank)
+    }
+
+    @Test
+    fun parsesLevelFromHeadCardAndKeepsDisplayText() {
+        val root = response()
+        val card = JSONObject().put("level", "LV.12").put("level_icon", "https://example.com/lv12.png")
+        root.getJSONObject("data").put(
+            "cards",
+            JSONArray().put(JSONObject().put("card_type", "11").put("card_group", JSONArray().put(card))),
+        )
+        val info = parseSuperTopic(root, id).info
+        assertEquals("LV.12", info.level)
+        assertEquals("https://example.com/lv12.png", info.levelIcon)
+    }
+
     private fun assertFailure(root: JSONObject) {
         failure(root)
     }

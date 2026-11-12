@@ -33,6 +33,14 @@ data class SuperTopicInfo(
     val readCount: String = "",
     val postCount: String = "",
     val fanCount: String = "",
+    /** 超话等级展示文本（如 "LV.7"），来自 pageInfo / 头部卡的 level 字段。 */
+    val level: String = "",
+    val levelIcon: String = "",
+    val levelScheme: String = "",
+    /** 超话头衔 / 排名小字（如 "手游超话No.3"），来自 portrait_sub_text / title_sub。 */
+    val titleSub: String = "",
+    /** 超话排名（urank）。 */
+    val rank: String = "",
 )
 
 data class SuperTopicPage(
@@ -128,6 +136,14 @@ fun parseSuperTopic(root: JSONObject, expectedContainerId: String): SuperTopicPa
             }
         }
     }
+    val levelNode = superTopicLevelNode(page, data)
+    val levelRaw = levelNode.str("level")
+        .ifBlank { levelNode.str("level_desc") }
+        .ifBlank { levelNode.str("grade") }
+    val titleSub = page.str("portrait_sub_text")
+        .ifBlank { page.str("title_sub") }
+        .ifBlank { levelNode.str("title_sub") }
+    val rank = page.str("urank").ifBlank { levelNode.str("urank") }
     return SuperTopicPage(
         info = SuperTopicInfo(
             containerId = expected,
@@ -137,10 +153,43 @@ fun parseSuperTopic(root: JSONObject, expectedContainerId: String): SuperTopicPa
             readCount = counts["阅读"].orEmpty(),
             postCount = counts["帖子"] ?: page.str("total").takeIf { it.matches(Regex("[0-9]+")) }.orEmpty(),
             fanCount = counts["粉丝"].orEmpty(),
+            level = normalizeSuperTopicLevel(levelRaw),
+            levelIcon = levelNode.str("level_icon"),
+            levelScheme = levelNode.str("level_scheme"),
+            titleSub = stripHtml(titleSub).trim(),
+            rank = rank.trim(),
         ),
         items = items.values.toList(),
         nextCursor = cursor,
     )
+}
+
+/** 等级可能挂在 pageInfo 顶层，也可能在头部卡片（head_cards / cardlist_head_cards）里，按优先级取第一个有值的节点。 */
+private fun superTopicLevelNode(page: JSONObject, data: JSONObject): JSONObject {
+    if (page.has("level") || page.has("level_icon") || page.has("level_desc")) return page
+    findSuperTopicLevelCard(data.optJSONArray("cards"))?.let { return it }
+    return page
+}
+
+private fun findSuperTopicLevelCard(cards: JSONArray?): JSONObject? {
+    if (cards == null) return null
+    for (i in 0 until cards.length()) {
+        val card = cards.optJSONObject(i) ?: continue
+        if (card.has("level_icon") || card.has("level_scheme") ||
+            (card.has("level") && (card.has("urank") || card.has("level_desc")))
+        ) return card
+        findSuperTopicLevelCard(card.optJSONArray("card_group"))?.let { return it }
+        findSuperTopicLevelCard(card.optJSONArray("group"))?.let { return it }
+    }
+    return null
+}
+
+/** 纯数字补成 "LV.n"；已经是 "LV.7" / "等级7" 等展示文本则原样保留。 */
+private fun normalizeSuperTopicLevel(raw: String): String {
+    val text = stripHtml(raw).trim()
+    if (text.isEmpty()) return ""
+    if (text.matches(Regex("[0-9]+"))) return "LV.$text"
+    return text
 }
 
 private fun collectSuperTopicCards(cards: JSONArray?, items: MutableMap<String, Status>) {

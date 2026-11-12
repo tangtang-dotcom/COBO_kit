@@ -257,19 +257,32 @@ private fun FollowedSuperTopicRow(topic: FollowedSuperTopic, onClick: () -> Unit
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = listOf(
-                topic.desc1.trim(),
-                topic.desc2.trim(),
-            ).filter { it.isNotBlank() }.joinToString(" · ")
-            if (subtitle.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = subtitle,
-                    fontSize = 12.sp,
-                    color = scheme.onSurfaceSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            val levelText = topic.desc1.trim()
+            val hasLevel = isSuperTopicLevelText(levelText)
+            val subtitle = if (hasLevel) {
+                topic.desc2.trim()
+            } else {
+                listOf(levelText, topic.desc2.trim())
+                    .filter { it.isNotBlank() }.joinToString(" · ")
+            }
+            if (hasLevel || subtitle.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (hasLevel) SuperTopicLevelBadge(levelText)
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            text = subtitle,
+                            fontSize = 12.sp,
+                            color = scheme.onSurfaceSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
+                }
             }
         }
         if (topic.followed) {
