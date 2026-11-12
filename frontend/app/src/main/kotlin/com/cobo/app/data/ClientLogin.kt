@@ -15,7 +15,7 @@ import org.json.JSONObject
 object ClientLogin {
 
     /** 发短信按「渠道号」限流（8513 / 8517）。一条走不通就换下一条，并记住用的是哪条。 */
-    private val CHANNELS = listOf("10B6395010", "1885396090", "10EA095060")
+    private val CHANNELS = listOf("10G7095010")
 
     @Volatile
     private var channel: String = CHANNELS.first()
@@ -33,14 +33,19 @@ object ClientLogin {
 
     suspend fun sendCode(phone: String, area: String) {
         var failure: Exception? = null
+        val empty = Session(cookie = "", uid = "", savedAt = 0L)
         for (from in CHANNELS) {
             val query = linkedMapOf<String, String?>(
                 "from" to from,
                 "area" to area,
                 "phone" to phone,
             )
+            // 发码也必须走带全套客户端公共参数的通道，否则服务端回「客户端版本过低」。
             val root = try {
-                Api.containerPost("account/login_sendcode", query, emptyMap())
+                ContainerApi.postFull("account/login_sendcode", query, emptyMap(), empty).first
+            } catch (e: ApiException) {
+                if (e.errno == "8513" || e.errno == "8517") { failure = e; continue }
+                throw e
             } catch (e: Exception) {
                 failure = e
                 continue
