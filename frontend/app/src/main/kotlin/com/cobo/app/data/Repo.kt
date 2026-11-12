@@ -872,6 +872,40 @@ class Repo(private val context: Context, private val store: Store) {
         return parseSuperTopic(root, id)
     }
 
+    /** 走客户端容器接口（`api.weibo.cn/2/cardlist`）取超话页，用短信登录存下的 gsid 会话。 */
+    suspend fun superTopicClient(
+        containerId: String,
+        sinceId: String? = null,
+        order: SuperTopicOrder = SuperTopicOrder.LatestComments,
+    ): SuperTopicPage {
+        val id = superTopicId(containerId) ?: throw ApiException("无效的超话地址")
+        val session = store.auxGsid() ?: throw ApiException("超话等级需要先在短信登录拿到客户端凭证", "-100")
+        val cursor = sinceId?.takeIf { it.isNotBlank() }
+        val params = linkedMapOf<String, String?>(
+            "containerid" to "$id${order.suffix}",
+            "page" to "1",
+        )
+        if (cursor != null) params["since_id"] = cursor
+        val root = ContainerApi.get("cardlist", params, session)
+        return parseSuperTopicClient(root, id)
+    }
+
+    /** 有客户端凭证就走容器接口（能带出等级/头衔），失败或没凭证时退回网页接口。 */
+    suspend fun superTopicPreferClient(
+        containerId: String,
+        sinceId: String? = null,
+        order: SuperTopicOrder = SuperTopicOrder.LatestComments,
+    ): SuperTopicPage {
+        if (store.auxGsid() != null) {
+            val result = runCatching { superTopicClient(containerId, sinceId, order) }
+            result.getOrNull()?.let { return it }
+            val reason = result.exceptionOrNull()?.message.orEmpty()
+            val fallback = superTopic(containerId, sinceId, order)
+            return fallback.copy(info = fallback.info.copy(debug = "client失败: $reason"))
+        }
+        return superTopic(containerId, sinceId, order)
+    }
+
     /** 当前账号关注的超话列表，分页游标来自 cardlistInfo.since_id。 */
     suspend fun followedSuperTopics(sinceId: String? = null): FollowedSuperTopicPage {
         if (!hasSession()) throw ApiException("超话需要登录后查看", "-100")

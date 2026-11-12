@@ -43,6 +43,8 @@ data class SuperTopicInfo(
     val titleSub: String = "",
     /** 超话排名（urank）。 */
     val rank: String = "",
+    /** 调试用：容器接口返回的结构摘要，确认字段后移除。 */
+    val debug: String = "",
 )
 
 data class SuperTopicPage(
@@ -191,6 +193,83 @@ fun parseSuperTopic(root: JSONObject, expectedContainerId: String): SuperTopicPa
 }
 
 /** 等级可能挂在 pageInfo 顶层，也可能在头部卡片（head_cards / cardlist_head_cards）里，按优先级取第一个有值的节点。 */
+/**
+ * 容器接口（`api.weibo.cn/2/cardlist`）返回的超话页。结构与网页版不同，这里容错解析：
+ * 优先 `data.pageInfo` / `data.cards`，其次顶层 `pageInfo` / `cards`。
+ * 目前只把结构摘要塞进 [SuperTopicInfo.debug]，用于确认客户端接口的真实字段。
+ */
+fun parseSuperTopicClient(root: JSONObject, expectedContainerId: String): SuperTopicPage {
+    val expected = normalizedSuperTopicId(expectedContainerId)
+        ?: throw ApiException("无效的超话地址")
+    val data = root.optJSONObject("data") ?: root
+    val page = data.optJSONObject("pageInfo") ?: root.optJSONObject("pageInfo")
+    val items = LinkedHashMap<String, Status>()
+    collectSuperTopicCards(data.optJSONArray("cards") ?: root.optJSONArray("cards"), items)
+
+    val title = page?.str("page_title")?.trim().orEmpty()
+        .ifBlank { page?.str("nick")?.trim().orEmpty() }
+        .ifBlank { "超话" }
+    val counts = LinkedHashMap<String, String>()
+    page?.optJSONArray("desc_more")?.let { arr ->
+        for (i in 0 until arr.length()) {
+            val text = (arr.opt(i) as? String)?.replace(Regex("[\\s\u3000]+"), "") ?: continue
+            for (m in superTopicCount.findAll(text)) counts.putIfAbsent(m.groupValues[1], m.groupValues[2])
+        }
+    }
+    val levelSource = buildString {
+        append(page?.str("detail_desc").orEmpty()).append('\n')
+        append(page?.str("desc").orEmpty()).append('\n')
+        page?.optJSONArray("desc_more")?.let { arr -> for (i in 0 until arr.length()) append(arr.optString(i)).append('\n') }
+    }
+    val levelMatch = superTopicLevelDetail.find(levelSource)
+    val levelRaw = levelMatch?.groupValues?.get(1)?.replace(Regex("\\s+"), "").orEmpty()
+    val levelTitle = levelMatch?.groupValues?.getOrNull(2)?.trim().orEmpty()
+    val cursor = page?.str("since_id")?.takeIf { it.matches(Regex("[0-9]+")) && it.any { d -> d != '0' } }
+
+    val firstMblog = runCatching {
+        var found: JSONObject? = null
+        fun walk(arr: JSONArray?) {
+            if (arr == null || found != null) return
+            for (i in 0 until arr.length()) {
+                if (found != null) return
+                val o = arr.optJSONObject(i) ?: continue
+                val mb = o.optJSONObject("mblog")
+                if (mb != null) {
+                    found = mb
+                    return
+                }
+                walk(o.optJSONArray("card_group"))
+                walk(o.optJSONArray("group"))
+            }
+        }
+        walk(data.optJSONArray("cards") ?: root.optJSONArray("cards"))
+        found
+    }.getOrNull()
+    val debug = buildString {
+        append("root=").append(root.keys().asSequence().toList())
+        append(" | data=").append(data.keys().asSequence().toList())
+        if (page != null) append(" | page=").append(page.keys().asSequence().toList())
+        append(" | cards=").append(items.size)
+        if (firstMblog != null) append(" | mblog=").append(firstMblog.keys().asSequence().toList())
+    }.take(700)
+
+    return SuperTopicPage(
+        info = SuperTopicInfo(
+            containerId = expected,
+            title = title,
+            description = "",
+            readCount = counts["阅读"].orEmpty(),
+            postCount = counts["帖子"].orEmpty(),
+            fanCount = counts["粉丝"].orEmpty(),
+            level = levelRaw,
+            titleSub = levelTitle,
+            debug = debug,
+        ),
+        items = items.values.toList(),
+        nextCursor = cursor,
+    )
+}
+
 private fun superTopicLevelNode(page: JSONObject, data: JSONObject): JSONObject {
     if (page.has("level") || page.has("level_icon") || page.has("level_desc")) return page
     findSuperTopicLevelCard(data.optJSONArray("cards"))?.let { return it }

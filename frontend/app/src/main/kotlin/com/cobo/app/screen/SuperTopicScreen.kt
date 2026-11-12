@@ -105,7 +105,7 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
     val scope = rememberCoroutineScope()
     var order by remember(containerId) { mutableStateOf(SuperTopicOrder.LatestComments) }
     val store = remember(containerId, order) {
-        SuperTopicStore(containerId, order) { cursor -> App.repo.superTopic(containerId, cursor, order) }
+        SuperTopicStore(containerId, order) { cursor -> App.repo.superTopicPreferClient(containerId, cursor, order) }
     }
     val feed = store.feed
     val listState = rememberLazyListState()
@@ -197,6 +197,14 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
                                 if (info.description.isNotBlank()) {
                                     Spacer(Modifier.height(10.dp))
                                     Text(info.description, fontSize = 14.sp)
+                                }
+                                if (info.debug.isNotBlank()) {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        text = "DBG " + info.debug,
+                                        fontSize = 9.sp,
+                                        color = Color(0xFFB00020),
+                                    )
                                 }
                                 Spacer(Modifier.height(8.dp))
                             }
