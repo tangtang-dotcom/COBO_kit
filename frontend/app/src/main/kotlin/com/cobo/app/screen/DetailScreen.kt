@@ -384,8 +384,12 @@ fun DetailScreen(nav: NavState, id: String, mid: String, readOnly: Boolean = fal
                             // COUI's ChipTab is a 32dp, 14sp control that dwarfs a 13sp section label,
                             // so the two orders share one compact track instead.
                             SortSwitch(
+                                entries = CommentSortEntries,
                                 selected = sort,
                                 onSelect = ::switchSort,
+                                tagFor = { sortEntry ->
+                                    if (sortEntry == CommentSort.Hot) "comment_sort_hot" else "comment_sort_time"
+                                },
                             )
                         }
                         // A hairline progress bar sits in the header's bottom padding, so a slow
@@ -946,14 +950,16 @@ private fun ReplyRow(
     }
 }
 
-private val SortEntries = listOf("热度" to CommentSort.Hot, "时间" to CommentSort.Time)
+private val CommentSortEntries = listOf("热度" to CommentSort.Hot, "时间" to CommentSort.Time)
 private val SortSpring = spring<Float>(dampingRatio = 0.82f, stiffness = 420f)
 private val SortPressSpring = spring<Float>(dampingRatio = 1f, stiffness = 438.65f)
 
 @Composable
-private fun SortSwitch(
-    selected: CommentSort,
-    onSelect: (CommentSort) -> Unit,
+internal fun <T> SortSwitch(
+    entries: List<Pair<String, T>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    tagFor: (T) -> String,
     modifier: Modifier = Modifier,
 ) {
     val scheme = COUITheme.colorScheme
@@ -963,17 +969,17 @@ private fun SortSwitch(
     // Both labels are measured at the heavier weight so the pill never clips a label as the
     // selected side swaps in, and so the control grows with the user's font scale.
     val labelSize = remember(measurer, labelStyle) {
-        val sizes = SortEntries.map { measurer.measure(it.first, labelStyle).size }
+        val sizes = entries.map { measurer.measure(it.first, labelStyle).size }
         sizes.maxOf { it.width } to sizes.maxOf { it.height }
     }
     val segmentWidth = with(density) { labelSize.first.toDp() } + 20.dp
     val segmentHeight = with(density) { labelSize.second.toDp() } + 8.dp
     val segmentWidthPx = with(density) { segmentWidth.toPx() }
-    val selectedIndex = SortEntries.indexOfFirst { it.second == selected }.coerceAtLeast(0)
+    val selectedIndex = entries.indexOfFirst { it.second == selected }.coerceAtLeast(0)
     val indicator = remember { Animatable(selectedIndex.toFloat()) }
     var dragValue by remember { mutableStateOf<Float?>(null) }
     val scope = rememberCoroutineScope()
-    val interactions = remember { List(SortEntries.size) { MutableInteractionSource() } }
+    val interactions = remember { List(entries.size) { MutableInteractionSource() } }
     val pressed = interactions.map { it.collectIsPressedAsState() }
     val dark = scheme.background.luminance() < 0.5f
 
@@ -995,15 +1001,15 @@ private fun SortSwitch(
                     onHorizontalDrag = { change, delta ->
                         change.consume()
                         dragValue = ((dragValue ?: indicator.value) + delta / segmentWidthPx)
-                            .coerceIn(0f, (SortEntries.size - 1).toFloat())
+                            .coerceIn(0f, (entries.size - 1).toFloat())
                     },
                     onDragEnd = {
                         val start = dragValue ?: indicator.value
-                        val target = start.roundToInt().coerceIn(0, SortEntries.size - 1)
+                        val target = start.roundToInt().coerceIn(0, entries.size - 1)
                         scope.launch {
                             indicator.snapTo(start)
                             dragValue = null
-                            if (target != selectedIndex) onSelect(SortEntries[target].second)
+                            if (target != selectedIndex) onSelect(entries[target].second)
                             else indicator.animateTo(target.toFloat(), SortSpring)
                         }
                     },
@@ -1027,7 +1033,7 @@ private fun SortSwitch(
                 .background(if (dark) scheme.surfaceContainerHigh else scheme.surfaceContainer),
         )
         Row(Modifier.height(segmentHeight)) {
-            SortEntries.forEachIndexed { index, (label, entrySort) ->
+            entries.forEachIndexed { index, (label, entrySort) ->
                 val proximity = (1f - abs(value - index)).coerceIn(0f, 1f)
                 val labelScale by animateFloatAsState(
                     targetValue = if (pressed[index].value) 0.94f else 1f,
@@ -1049,9 +1055,7 @@ private fun SortSwitch(
                             role = Role.RadioButton,
                             onClick = { onSelect(entrySort) },
                         )
-                        .testTag(
-                            if (entrySort == CommentSort.Hot) "comment_sort_hot" else "comment_sort_time"
-                        ),
+                        .testTag(tagFor(entrySort)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(

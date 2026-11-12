@@ -1,7 +1,6 @@
 package com.cobo.app.screen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -28,9 +27,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cobo.app.App
@@ -155,11 +153,6 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
                 ) {
                     item(key = "header") {
                         Column(Modifier.padding(8.dp)) {
-                            SuperTopicOrderRow(
-                                selected = order,
-                                onSelect = { next -> if (next != order) order = next },
-                            )
-                            Spacer(Modifier.height(8.dp))
                             store.info?.let { info ->
                                 Row {
                                     Avatar(info.avatar, 56.dp)
@@ -190,6 +183,13 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
                                 TextButton(text = "前往登录", onClick = { nav.push(Route.Login()) })
                             }
                         }
+                    }
+                    item(key = "sort") {
+                        SuperTopicSortHeader(
+                            selected = order,
+                            onSelect = { next -> if (next != order) order = next },
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 2.dp),
+                        )
                     }
                     if (feed.items.isEmpty()) {
                         item(key = "state") {
@@ -265,26 +265,34 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
     }
 }
 
+private val SuperTopicSortEntries = listOf(
+    "最新评论" to SuperTopicOrder.LatestComments,
+    "最新发帖" to SuperTopicOrder.LatestPosts,
+)
+
 @Composable
-private fun SuperTopicOrderRow(selected: SuperTopicOrder, onSelect: (SuperTopicOrder) -> Unit) {
+private fun SuperTopicSortHeader(
+    selected: SuperTopicOrder,
+    onSelect: (SuperTopicOrder) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val scheme = COUITheme.colorScheme
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SuperTopicOrder.entries.forEach { order ->
-            val active = order == selected
-            Box(
-                Modifier
-                    .testTag("supertopic_order_${order.key}")
-                    .clip(RoundedCornerShape(50))
-                    .background(if (active) scheme.primary.copy(alpha = 0.12f) else Color.Transparent)
-                    .clickable { onSelect(order) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = order.label,
-                    fontSize = 13.sp,
-                    color = if (active) scheme.primary else scheme.onSurfaceSecondary,
-                )
-            }
-        }
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "超话帖子",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = scheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        SortSwitch(
+            entries = SuperTopicSortEntries,
+            selected = selected,
+            onSelect = onSelect,
+            tagFor = { order -> "supertopic_order_${order.key}" },
+        )
     }
 }
