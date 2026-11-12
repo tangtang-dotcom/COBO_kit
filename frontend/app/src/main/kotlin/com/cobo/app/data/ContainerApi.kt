@@ -42,11 +42,11 @@ object ContainerApi {
         return linkedMapOf(
         "c" to "android",
         "from" to WeiboNative.FROM,
-        "wm" to "4260_0001",
+        "wm" to "9006_2001",
         "oldwm" to Api.oldWm(),
         "ua" to Api.clientUa(),
         "v_p" to "89",
-        "wb_version" to "7982",
+        "wb_version" to "7500",
         "skin" to "default",
         "v_f" to "2",
         "ft" to "0",
