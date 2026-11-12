@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -67,3 +69,15 @@ jobs:
           name: cobo-debug-apk
           path: frontend/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # 公开的 Release 资源，手机浏览器/下载器无需登录即可取，便于交付。
+      - name: Publish APK to release
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: build-${{ github.run_number }}
+          files: frontend/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

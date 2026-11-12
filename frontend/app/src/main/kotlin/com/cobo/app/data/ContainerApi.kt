@@ -46,6 +46,8 @@ object ContainerApi {
         "skin" to "default",
         "v_f" to "2",
         "lang" to "zh_CN",
+        // One 默认 appkey（按厂商映射后解密得到的值）；缺它服务端会回 -105 客户端身份校验失败。
+        "source" to "6380669573",
         "aid" to "7501641714",
         "networktype" to Api.networkType(),
         "android_id" to Api.androidId(),
