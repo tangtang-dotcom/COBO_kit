@@ -251,7 +251,7 @@ object Api {
 
     /** 容器接口自报的客户端标识，格式与客户端 UA 一致。 */
     fun clientUa(): String =
-        "${Build.MANUFACTURER}-${Build.MODEL}__weibo__14.6.1__android__android${Build.VERSION.RELEASE}"
+        "${Build.MANUFACTURER}-${Build.MODEL}__weibo__16.11.1__android__android${Build.VERSION.RELEASE}"
 
     fun oldWm(): String = when (Build.MANUFACTURER.uppercase()) {
         "ONEPLUS" -> "14038_0004"
