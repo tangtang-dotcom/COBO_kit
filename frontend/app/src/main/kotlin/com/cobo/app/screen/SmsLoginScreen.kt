@@ -88,30 +88,21 @@ fun SmsLoginScreen(nav: NavState, addAccount: Boolean, relogin: String? = null) 
     fun login() {
         if (!ready || logging) return
         logging = true
-        hint = "正在登录…"
+        hint = "正在获取客户端凭证…"
         scope.launch {
-            val result = runCatching { App.repo.loginWithClient(phone.trim(), code.trim()) }
+            val result = runCatching { App.repo.loginClientForSupertopic(phone.trim(), code.trim()) }
             logging = false
             val account = result.getOrNull()
             if (account == null) {
-                val reason = result.exceptionOrNull()?.message ?: "登录失败"
-                // 客户端通道被微博关掉以后（-105 客户端身份校验失败），自动退到网页登录，
-                // 和 Share 当年内建登录被封之后的处理一样。
-                if (reason.contains("客户端")) {
-                    hint = "微博已停用这条客户端通道，正在改用网页登录…"
-                    nav.push(Route.Login(addAccount = addAccount, fresh = addAccount, relogin = relogin))
+                val reason = result.exceptionOrNull()?.message ?: "获取失败"
+                hint = if (reason.contains("客户端") || reason.contains("105")) {
+                    "客户端通道被微博拒绝：$reason"
                 } else {
-                    hint = reason
+                    reason
                 }
                 return@launch
             }
-            hint = "已登录：${account.name.ifBlank { account.uid }}"
-            if (addAccount) {
-                nav.reset(Route.Main)
-                nav.push(Route.Accounts)
-            } else {
-                nav.reset(Route.Main)
-            }
+            hint = "已拿到客户端凭证（gsid），网页登录没动。返回后超话页才能出等级。"
         }
     }
 

@@ -400,6 +400,30 @@ class Repo(private val context: Context, private val store: Store) {
     }
 
     /**
+     * 只管拿客户端凭证：短信登录成功后，把 gsid 单独存到 `supertopic_auth.json`，
+     * **不动**当前网页登录（session.json）。超话等需要客户端接口的功能单独读这份凭证。
+     */
+    suspend fun loginClientForSupertopic(phone: String, code: String, area: String = ""): Account {
+        var result = ClientLogin.verify(phone, area, code)
+        if (result.gsid.isBlank()) throw ApiException("没有拿到 gsid")
+        if (result.cookie.isBlank()) {
+            runCatching { ClientLogin.refresh(result.uid, result.gsid) }
+                .getOrNull()
+                ?.takeIf { it.cookie.isNotBlank() }
+                ?.let { result = it }
+        }
+        store.saveAuxGsid(result.uid, result.gsid, result.cookie)
+        return Account(
+            uid = result.uid,
+            name = "客户端凭证",
+            avatar = "",
+            cookie = result.cookie,
+            gsid = result.gsid,
+            gsidAt = System.currentTimeMillis(),
+        )
+    }
+
+    /**
      * 拿 gsid 换一份新 cookie。只换 cookie 和 gsid，昵称头像沿用账号列表里的旧值——
      * 这里刻意不拉 profile，避免在持锁期间又走到 [get] 触发一次续期。
      */

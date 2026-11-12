@@ -91,6 +91,42 @@ class Store(private val context: Context) {
         write("session.json", o)
     }
 
+    /**
+     * 超话等功能单独用的「客户端 gsid」，存在独立的 `supertopic_auth.json`，
+     * **不覆盖** `session.json` 里的网页登录。网页照常刷，只有需要客户端接口的地方读它。
+     */
+    fun saveAuxGsid(uid: String, gsid: String, cookie: String) {
+        val o = JSONObject()
+            .put("uid", uid)
+            .put("gsid", gsid)
+            .put("cookie", cookie)
+            .put("at", System.currentTimeMillis())
+        write("supertopic_auth.json", o)
+    }
+
+    fun auxGsid(): Session? {
+        val f = file("supertopic_auth.json")
+        if (!f.exists()) return null
+        return runCatching {
+            val o = JSONObject(f.readText())
+            val gsid = o.str("gsid")
+            if (gsid.isBlank()) null
+            else Session(
+                cookie = o.str("cookie"),
+                uid = o.str("uid"),
+                savedAt = o.optLong("at"),
+                gsid = gsid,
+                gsidAt = o.optLong("at"),
+                source = "client",
+                loginType = 4,
+            )
+        }.getOrNull()
+    }
+
+    fun clearAuxGsid() {
+        runCatching { file("supertopic_auth.json").delete() }
+    }
+
     /** 续期只换 gsid 与 cookie，账号、昵称这些字段原样留着。 */
     fun updateClientSession(
         gsid: String,
