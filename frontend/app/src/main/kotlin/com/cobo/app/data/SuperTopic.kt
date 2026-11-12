@@ -18,6 +18,8 @@ data class FollowedSuperTopic(
     val desc2: String = "",
     val scheme: String = "",
     val followed: Boolean = false,
+    /** 超话等级展示文本（如 "LV.1"），从 desc1 的 "等级 LV.1" 中提取。 */
+    val level: String = "",
 )
 
 data class FollowedSuperTopicPage(
@@ -51,6 +53,9 @@ data class SuperTopicPage(
 
 private val superTopicContainer = Regex("100808[0-9a-fA-F]{32}")
 private val superTopicCount = Regex("(阅读|帖子|粉丝)([0-9]+(?:\\.[0-9]+)?[万亿千]?\\+?)(?=阅读|帖子|粉丝|$)")
+
+/** H5 接口把等级放在 pageInfo.desc 文本里，形如「等级LV.9初露極锋」，第二个捕获组是等级头衔。 */
+private val superTopicLevelDetail = Regex("等级\\s*(LV\\.?\\s*\\d+)\\s*([^\\s\u3000>]+)?")
 
 private fun normalizedSuperTopicId(value: String): String? =
     value.removeSuffix(SuperTopicOrder.LatestComments.suffix)
@@ -137,24 +142,45 @@ fun parseSuperTopic(root: JSONObject, expectedContainerId: String): SuperTopicPa
         }
     }
     val levelNode = superTopicLevelNode(page, data)
-    val levelRaw = levelNode.str("level")
-        .ifBlank { levelNode.str("level_desc") }
-        .ifBlank { levelNode.str("grade") }
-    val titleSub = page.str("portrait_sub_text")
+    // 微博 H5 getIndex 不返回独立 level 字段，等级与头衔都在 pageInfo.desc（及 desc_more）文本里，
+    // 例如「阅读220.5亿　帖子140.6万　粉丝166.3万 等级LV.9初露極锋　连续签到0天」。
+    val levelSource = buildString {
+        append(page.str("detail_desc")).append('\n')
+        append(page.str("desc")).append('\n')
+        page.optJSONArray("desc_more")?.let { arr ->
+            for (i in 0 until arr.length()) append(arr.optString(i)).append('\n')
+        }
+    }
+    val levelMatch = superTopicLevelDetail.find(levelSource)
+    val levelRaw = levelMatch?.groupValues?.get(1)?.replace(Regex("\\s+"), "")
+        ?: levelNode.str("level").ifBlank { levelNode.str("level_desc") }.ifBlank { levelNode.str("grade") }
+    val levelTitle = levelMatch?.groupValues?.getOrNull(2)?.trim().orEmpty()
+    val portraitSub = stripHtml(page.str("portrait_sub_text")).trim()
+    // 排名在 portrait_sub_text 里，形如「电竞俱乐部超话No.7」。
+    val rankValue = Regex("No\\.?\\s*\\d+", RegexOption.IGNORE_CASE).find(portraitSub)?.value
+    val portraitTitle = if (rankValue != null) {
+        portraitSub.replace(rankValue, "").trim().trimEnd('·', ' ', '\u3000')
+    } else {
+        portraitSub
+    }
+    val titleSub = levelTitle
+        .ifBlank { portraitTitle }
         .ifBlank { page.str("title_sub") }
         .ifBlank { levelNode.str("title_sub") }
-    val rank = page.str("urank").ifBlank { levelNode.str("urank") }
+    val rank = rankValue ?: page.str("urank").ifBlank { levelNode.str("urank") }
     return SuperTopicPage(
         info = SuperTopicInfo(
             containerId = expected,
             title = title,
-            description = page.str("desc").ifBlank { page.str("detail_desc") },
+            description = stripSuperTopicDescription(
+                page.str("desc").ifBlank { page.str("detail_desc") },
+            ),
             avatar = page.str("portrait_hd").ifBlank { page.str("portrait") },
             readCount = counts["阅读"].orEmpty(),
             postCount = counts["帖子"] ?: page.str("total").takeIf { it.matches(Regex("[0-9]+")) }.orEmpty(),
             fanCount = counts["粉丝"].orEmpty(),
             level = normalizeSuperTopicLevel(levelRaw),
-            levelIcon = levelNode.str("level_icon"),
+            levelIcon = page.str("title_icon").ifBlank { levelNode.str("level_icon") },
             levelScheme = levelNode.str("level_scheme"),
             titleSub = stripHtml(titleSub).trim(),
             rank = rank.trim(),
@@ -183,6 +209,14 @@ private fun findSuperTopicLevelCard(cards: JSONArray?): JSONObject? {
     }
     return null
 }
+
+/** 顺手清掉 desc 里「阅读/帖子/粉丝/等级/连续签到」这类噪声，只保留真正的简介文案。 */
+private val superTopicDescNoise = Regex(
+    "(阅读|帖子|粉丝)\\s*[0-9.]+\\s*[万亿千]?\\+?|等级\\s*LV\\.?\\s*\\d+\\S*|连续签到\\s*\\d+\\s*天|>>",
+)
+
+private fun stripSuperTopicDescription(raw: String): String =
+    superTopicDescNoise.replace(stripHtml(raw), "").replace(Regex("[\\s\u3000]+"), " ").trim()
 
 /** 纯数字补成 "LV.n"；已经是 "LV.7" / "等级7" 等展示文本则原样保留。 */
 private fun normalizeSuperTopicLevel(raw: String): String {
@@ -237,6 +271,9 @@ private fun collectFollowedSuperTopics(cards: JSONArray?, topics: MutableMap<Str
                         desc2 = card.opt("desc2") as? String ?: "",
                         scheme = scheme,
                         followed = "已关注" in buttonName || "关注" in buttonName,
+                        level = superTopicLevelDetail
+                            .find(card.opt("desc1") as? String ?: "")
+                            ?.groupValues?.get(1)?.replace(Regex("\\s+"), "").orEmpty(),
                     ),
                 )
             }

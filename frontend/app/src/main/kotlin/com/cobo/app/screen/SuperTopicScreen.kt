@@ -170,10 +170,10 @@ fun SuperTopicScreen(nav: NavState, containerId: String, fallbackUrl: String) {
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             ) {
                                                 if (info.level.isNotBlank()) SuperTopicLevelBadge(info.level)
-                                                val subline = info.titleSub.ifBlank {
-                                                    info.rank.takeIf { it.isNotBlank() }
-                                                        ?.let { "超话排名 $it" }.orEmpty()
-                                                }
+                                                val subline = listOf(
+                                                    info.titleSub,
+                                                    info.rank.takeIf { it.isNotBlank() }?.let { "排名 $it" }.orEmpty(),
+                                                ).filter { it.isNotBlank() }.joinToString(" · ")
                                                 if (subline.isNotBlank()) {
                                                     Text(
                                                         text = subline,
@@ -323,7 +323,7 @@ private fun SuperTopicSortHeader(
     }
 }
 
-private val superTopicLevelPattern = Regex("(?i)^(lv\\.?\\s*\\d+|等级\\s*\\d+|\\d+\\s*级)$")
+private val superTopicLevelPattern = Regex("(?i)^(等级\\s*)?(lv\\.?\\s*\\d+|\\d+\\s*级)$")
 
 /** 列表卡片里的 desc1 是否是可作徽章的超话等级文本。 */
 internal fun isSuperTopicLevelText(text: String): Boolean =
@@ -333,7 +333,7 @@ internal fun isSuperTopicLevelText(text: String): Boolean =
 @Composable
 internal fun SuperTopicLevelBadge(text: String, modifier: Modifier = Modifier) {
     Text(
-        text = text.trim(),
+        text = text.trim().replace(Regex("(?i)^等级\\s*"), ""),
         fontSize = 10.sp,
         fontWeight = FontWeight.Medium,
         color = Color(0xFFB47A00),

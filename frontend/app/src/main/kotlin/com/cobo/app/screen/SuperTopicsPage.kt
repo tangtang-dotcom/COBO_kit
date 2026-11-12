@@ -257,8 +257,8 @@ private fun FollowedSuperTopicRow(topic: FollowedSuperTopic, onClick: () -> Unit
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val levelText = topic.desc1.trim()
-            val hasLevel = isSuperTopicLevelText(levelText)
+            val levelText = topic.level.ifBlank { topic.desc1.trim() }
+            val hasLevel = topic.level.isNotBlank() || isSuperTopicLevelText(levelText)
             val subtitle = if (hasLevel) {
                 topic.desc2.trim()
             } else {
@@ -271,7 +271,7 @@ private fun FollowedSuperTopicRow(topic: FollowedSuperTopic, onClick: () -> Unit
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    if (hasLevel) SuperTopicLevelBadge(levelText)
+                    if (hasLevel) SuperTopicLevelBadge(if (topic.level.isNotBlank()) topic.level else levelText)
                     if (subtitle.isNotBlank()) {
                         Text(
                             text = subtitle,

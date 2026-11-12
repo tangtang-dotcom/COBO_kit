@@ -182,8 +182,32 @@ class SuperTopicTest {
         val info = parseSuperTopic(root, id).info
         assertEquals("LV.7", info.level)
         assertEquals("https://example.com/lv7.png", info.levelIcon)
-        assertEquals("手游超话No.3", info.titleSub)
-        assertEquals("3", info.rank)
+        assertEquals("手游超话", info.titleSub)
+        assertEquals("No.3", info.rank)
+    }
+
+    @Test
+    fun parsesLevelFromDescTextAndExtractsRank() {
+        val root = response()
+        val page = root.getJSONObject("data").getJSONObject("pageInfo")
+        page.put(
+            "desc",
+            "阅读220.5亿\u3000帖子140.6万\u3000粉丝166.3万 等级LV.9初露極锋\u3000连续签到0天 >>",
+        )
+        page.put(
+            "desc_more",
+            JSONArray()
+                .put("阅读220.5亿\u3000帖子140.6万\u3000粉丝166.3万")
+                .put("等级LV.9初露極锋\u3000连续签到0天 >>"),
+        )
+        page.put("portrait_sub_text", "电竞俱乐部超话No.7")
+        val info = parseSuperTopic(root, id).info
+        assertEquals("LV.9", info.level)
+        assertEquals("初露極锋", info.titleSub)
+        assertEquals("No.7", info.rank)
+        assertEquals("220.5亿", info.readCount)
+        assertEquals("140.6万", info.postCount)
+        assertEquals("166.3万", info.fanCount)
     }
 
     @Test
